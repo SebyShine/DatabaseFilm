@@ -65,3 +65,103 @@
  * - Gestisci il caso in cui la chiave API non è stata inserita e mostra un messaggio di errore
  * - Gestisci il caso in cui non ci sono risultati per la ricerca e mostra un messaggio "Nessun film trovato"
  */
+
+const API_KEY = '1f78b545';
+const inputRicerca = document.getElementById("searchInput");
+const btnRicerca = document.getElementById("searchBtn");
+const tabellaRisultati = document.getElementById("resultsSection");
+const corpoTabella = document.getElementById("moviesTableBody");
+const messaggioNascosto = document.getElementById("message");
+
+// Funzione legge preferiti dal localStorage
+function ottieniPreferiti() {
+    return JSON.parse(localStorage.getItem('preferiti')) || [];
+}
+
+async function cercaFilm() {
+    const termineRicerca = inputRicerca.value.trim();
+    if (termineRicerca === "") {
+        alert("Inserisci un termine di ricerca.");
+        return;
+    }
+
+    // Reset stato
+    messaggioNascosto.classList.add("nascosto");
+    messaggioNascosto.className = "message"; // Ristabilisce la classe base ed elimina success/error passati
+
+    try {
+        const response = await fetch(`http://www.omdbapi.com/?apikey=${API_KEY}&s=${termineRicerca}`);
+        const data = await response.json();
+        mostraRisultati(data);
+    } catch (error) {
+        console.error("Errore durante la fetch:", error);
+        messaggioNascosto.textContent = "Si è verificato un errore di rete.";
+        messaggioNascosto.classList.add("error");
+        messaggioNascosto.classList.remove("nascosto");
+    }
+}
+
+function mostraRisultati(data) {
+    corpoTabella.innerHTML = "";
+    
+    if (data.Response === "True") {
+        // Nascondi messaggio d'errore precedente e mostra la tabella
+        tabellaRisultati.classList.remove("nascosto");
+        
+        const preferitiAttuali = ottieniPreferiti();
+
+        data.Search.forEach(film => {
+            const riga = document.createElement("tr");
+            
+            // Verifichiamo se il film è già salvato nei preferiti
+            const giaPreferito = preferitiAttuali.some(f => f.imdbID === film.imdbID);
+
+            riga.innerHTML = `
+                <td>
+                    <img src="${film.Poster !== "N/A" ? film.Poster : 'placeholder.jpg'}" 
+                         alt="${film.Title}" 
+                         class="movie-poster">
+                </td>
+                <td><strong>${film.Title}</strong></td>
+                <td>${film.Year}</td>
+                <td>${film.Type}</td>
+                <td>
+                    <button class="btn btn-add" ${giaPreferito ? 'disabled' : ''}>
+                        ${giaPreferito ? '★ Salvato' : '⭐ Aggiungi'}
+                    </button>
+                </td>
+            `;
+
+            // Evento click al bottone appena inserito
+            const btnAdd = riga.querySelector(".btn-add");
+            btnAdd.addEventListener("click", () => aggiungiAiPreferiti(film, btnAdd));
+
+            corpoTabella.appendChild(riga);
+        });
+    } else {
+        // Nascondi la tabella e mostra messaggio ERRORE dal CSS
+        tabellaRisultati.classList.add("nascosto");
+        messaggioNascosto.textContent = "Nessun film trovato.";
+        messaggioNascosto.classList.add("error");
+        messaggioNascosto.classList.remove("nascosto");
+    }
+}
+
+function aggiungiAiPreferiti(film, bottone) {
+    let preferiti = ottieniPreferiti();
+
+    if (!preferiti.some(f => f.imdbID === film.imdbID)) {
+        preferiti.push(film);
+        localStorage.setItem('preferiti', JSON.stringify(preferiti));
+        
+        // Disabilitiamo subito il bottone visivamente senza dover ricaricare la pagina
+        bottone.disabled = true;
+        bottone.textContent = "★ Salvato";
+    }
+}
+
+// Event Listener - ENTER
+btnRicerca.addEventListener("click", cercaFilm);
+inputRicerca.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") cercaFilm();
+});
